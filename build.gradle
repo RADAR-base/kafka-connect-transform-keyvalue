@@ -3,7 +3,7 @@ plugins {
     id 'java-library'
 }
 
-version = '7.3.3'
+version = '7.6.0'
 description = "Kafka Connect transformation used to copy the key and value to a struct in the value of the record."
 
 sourceCompatibility = JavaVersion.VERSION_17
