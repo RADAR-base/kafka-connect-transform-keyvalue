@@ -1,3 +1,5 @@
+REMOVE ME
+
 # Introduction
 
 Transforms can be used to change the data before it is written by a Kafka Connector.
