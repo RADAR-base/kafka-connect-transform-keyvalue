@@ -96,7 +96,7 @@ jobs:
         uses: docker/build-push-action@v3
         with:
           context: .
-          file: Dockerfile.s3
+          file: Dockerfile-legacy.s3-legacy
           push: true
           platforms: linux/arm64,linux/amd64
           tags: ${{ steps.docker_meta_s3.outputs.tags }}

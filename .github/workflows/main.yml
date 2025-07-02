@@ -72,7 +72,7 @@ jobs:
         uses: actions/cache@v3
         with:
           path: /tmp/.buildx-cache
-          key: ${{ runner.os }}-buildx-s3-${{ hashFiles('Dockerfile.s3', 'src/**', '*.gradle') }}
+          key: ${{ runner.os }}-buildx-s3-${{ hashFiles('./docker/legacy/Dockerfile.s3', 'src/**', '*.gradle') }}
           restore-keys: |
             ${{ runner.os }}-buildx-s3-
             ${{ runner.os }}-buildx-
@@ -92,7 +92,7 @@ jobs:
         uses: docker/build-push-action@v3
         with:
           context: .
-          file: ./Dockerfile.s3
+          file: ././docker/legacy/Dockerfile.s3
           platforms: linux/amd64,linux/arm64
           cache-from: type=local,src=/tmp/.buildx-cache
           cache-to: ${{ steps.cache-parameters.outputs.cache-to }}
@@ -107,7 +107,7 @@ jobs:
         uses: docker/build-push-action@v3
         with:
           context: ./
-          file: ./Dockerfile.s3
+          file: ././docker/legacy/Dockerfile.s3
           cache-from: ${{ steps.cache-parameters.outputs.load-cache-from }}
           load: true
           tags: ${{ steps.docker_meta.outputs.tags }}
@@ -161,7 +161,7 @@ jobs:
         uses: actions/cache@v3
         with:
           path: /tmp/.buildx-cache
-          key: ${{ runner.os }}-buildx-generic-${{ hashFiles('Dockerfile', 'src/**', '*.gradle') }}
+          key: ${{ runner.os }}-buildx-generic-${{ hashFiles('./docker/legacy/Dockerfile', 'src/**', '*.gradle') }}
           restore-keys: |
             ${{ runner.os }}-buildx-generic-
             ${{ runner.os }}-buildx-
