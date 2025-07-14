@@ -77,3 +77,9 @@ transforms=convertTimestamp
 transforms.convertTimestamp.type=org.radarbase.kafka.connect.transforms.TimestampConverter
 transforms.convertTimestamp.fields=time,timeReceived,timeCompleted,timestamp
 ```
+
+### Kafka Connect platform
+
+At present, support for both ConfluentInc. and Strimzi Kafka Connect platform implementations are supported through different
+Dockerfiles. Because RADAR-base has the intention to switch from ConfluentInc. to Strimzi based deployment in the future, the
+ConfluentInc. Docker assets are considered as legacy components and are located in the `docker/legacy` directory in this repo. 
