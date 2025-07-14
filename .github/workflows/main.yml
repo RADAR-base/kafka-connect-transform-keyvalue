@@ -25,7 +25,7 @@ jobs:
           java-version: 17
 
       - name: Setup Gradle
-        uses: gradle/gradle-build-action@v2
+        uses: gradle/actions/setup-gradle@v3
 
       - name: Compile code
         run: ./gradlew assemble
@@ -65,14 +65,14 @@ jobs:
         uses: docker/setup-qemu-action@v2
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
+        uses: docker/setup-buildx-action@v3
 
       - name: Cache layers
         id: cache-buildx
         uses: actions/cache@v3
         with:
           path: /tmp/.buildx-cache
-          key: ${{ runner.os }}-buildx-s3-${{ hashFiles('Dockerfile.s3', 'src/**', '*.gradle') }}
+          key: ${{ runner.os }}-buildx-s3-${{ hashFiles('./docker/legacy/Dockerfile.s3', 'src/**', '*.gradle') }}
           restore-keys: |
             ${{ runner.os }}-buildx-s3-
             ${{ runner.os }}-buildx-
@@ -89,10 +89,10 @@ jobs:
           fi
 
       - name: Build backend docker
-        uses: docker/build-push-action@v3
+        uses: docker/build-push-action@v6
         with:
           context: .
-          file: ./Dockerfile.s3
+          file: ././docker/legacy/Dockerfile.s3
           platforms: linux/amd64,linux/arm64
           cache-from: type=local,src=/tmp/.buildx-cache
           cache-to: ${{ steps.cache-parameters.outputs.cache-to }}
@@ -104,10 +104,10 @@ jobs:
 
       # will use the internal cache from the previous build step, and load it into the current memory
       - name: Build backend docker locally
-        uses: docker/build-push-action@v3
+        uses: docker/build-push-action@v6
         with:
           context: ./
-          file: ./Dockerfile.s3
+          file: ././docker/legacy/Dockerfile.s3
           cache-from: ${{ steps.cache-parameters.outputs.load-cache-from }}
           load: true
           tags: ${{ steps.docker_meta.outputs.tags }}
@@ -154,14 +154,14 @@ jobs:
         uses: docker/setup-qemu-action@v2
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
+        uses: docker/setup-buildx-action@v3
 
       - name: Cache frontend layers
         id: cache-buildx
         uses: actions/cache@v3
         with:
           path: /tmp/.buildx-cache
-          key: ${{ runner.os }}-buildx-generic-${{ hashFiles('Dockerfile', 'src/**', '*.gradle') }}
+          key: ${{ runner.os }}-buildx-generic-${{ hashFiles('./docker/legacy/Dockerfile', 'src/**', '*.gradle') }}
           restore-keys: |
             ${{ runner.os }}-buildx-generic-
             ${{ runner.os }}-buildx-
@@ -178,7 +178,7 @@ jobs:
           fi
 
       - name: Build docker
-        uses: docker/build-push-action@v3
+        uses: docker/build-push-action@v6
         with:
           context: .
           platforms: linux/amd64,linux/arm64
@@ -191,7 +191,7 @@ jobs:
             ${{ steps.docker_meta.outputs.labels }}
 
       - name: Build docker locally
-        uses: docker/build-push-action@v3
+        uses: docker/build-push-action@v6
         with:
           context: .
           cache-from: ${{ steps.cache-parameters.outputs.load-cache-from }}

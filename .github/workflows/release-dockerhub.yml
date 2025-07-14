@@ -1,38 +1,15 @@
-#See: https://docs.github.com/en/actions/publishing-packages/publishing-docker-images#publishing-images-to-github-packages
-name: Release
+# Create release files
+name: Release DockerHub
 
 on:
   release:
     types: [published]
 
 env:
-  REGISTRY: ghcr.io
-  DOCKER_IMAGE: radarbase/kafka-connect-transform-keyvalue-strimzi
-  DOCKER_IMAGE_S3: radarbase/kafka-connect-transform-s3-strimzi
+  DOCKER_IMAGE: radarbase/kafka-connect-transform-keyvalue
+  DOCKER_IMAGE_S3: radarbase/kafka-connect-transform-s3
 
 jobs:
-  # Upload jars to the GitHub release
-  upload:
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-java@v3
-        with:
-          distribution: temurin
-          java-version: 17
-
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
-
-      - name: Compile code
-        run: ./gradlew assemble
-
-      - name: Upload to GitHub
-        uses: AButler/upload-release-assets@v3.0
-        with:
-          files: 'build/libs/*;build/distributions/*'
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
 
   # Build and push tagged release docker image
   docker:
@@ -41,26 +18,27 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - name: Log in to the Container registry
-        uses: docker/login-action@65b78e6e13532edd9afa3aa52ac7964289d1a9c1
+      - name: Login to DockerHub
+        uses: docker/login-action@v2
         with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+      # Add Docker labels and tags
       - name: Docker meta
         id: docker_meta
         uses: docker/metadata-action@v4
         with:
-          images: ${{ env.REGISTRY }}/${{ env.DOCKER_IMAGE }}
+          images: ${{ env.DOCKER_IMAGE }}
           tags: |
             type=match,pattern=v(.*),group=1
 
+      # Add Docker labels and tags
       - name: Docker meta S3
         id: docker_meta_s3
         uses: docker/metadata-action@v4
         with:
-          images: ${{ env.REGISTRY }}/${{ env.DOCKER_IMAGE_S3 }}
+          images: ${{ env.DOCKER_IMAGE_S3 }}
           tags: |
             type=match,pattern=v(.*),group=1
 
@@ -73,6 +51,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
+          file: docker/legacy/Dockerfile
           push: true
           tags: ${{ steps.docker_meta.outputs.tags }}
           platforms: linux/arm64,linux/amd64
@@ -90,10 +69,9 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: Dockerfile.s3
+          file: docker/legacy/Dockerfile.s3
           push: true
           platforms: linux/arm64,linux/amd64
-
           # Use runtime labels from docker_meta as well as fixed labels
           labels: |
             ${{ steps.docker_meta_s3.outputs.labels }}
@@ -105,10 +83,10 @@ jobs:
 
       - name: Inspect image
         run: |
-          docker pull ${{ env.REGISTRY }}/${{ env.DOCKER_IMAGE }}:${{ steps.docker_meta.outputs.version }}
-          docker image inspect $${{ env.REGISTRY }}/{{ env.DOCKER_IMAGE }}:${{ steps.docker_meta.outputs.version }}
+          docker pull ${{ env.DOCKER_IMAGE }}:${{ steps.docker_meta.outputs.version }}
+          docker image inspect ${{ env.DOCKER_IMAGE }}:${{ steps.docker_meta.outputs.version }}
 
       - name: Inspect image S3
         run: |
-          docker pull ${{ env.REGISTRY }}/${{ env.DOCKER_IMAGE_S3 }}:${{ steps.docker_meta_s3.outputs.version }}
-          docker image inspect ${{ env.REGISTRY }}/${{ env.DOCKER_IMAGE_S3 }}:${{ steps.docker_meta_s3.outputs.version }}
+          docker pull ${{ env.DOCKER_IMAGE_S3 }}:${{ steps.docker_meta_s3.outputs.version }}
+          docker image inspect ${{ env.DOCKER_IMAGE_S3 }}:${{ steps.docker_meta_s3.outputs.version }}
