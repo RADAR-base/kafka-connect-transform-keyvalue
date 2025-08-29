@@ -6,8 +6,8 @@ on:
     types: [published]
 
 env:
-  DOCKER_IMAGE: radarbase/kafka-connect-transform-keyvalue
-  DOCKER_IMAGE_S3: radarbase/kafka-connect-transform-s3
+  DOCKER_IMAGE: ghcr.io/${{ github.repository }}/kafka-connect-transform-keyvalue
+  DOCKER_IMAGE_S3: ghcr.io/${{ github.repository }}/kafka-connect-transform-s3
 
 jobs:
   upload:
@@ -64,11 +64,12 @@ jobs:
           tags: |
             type=match,pattern=v(.*),group=1
 
-      - name: Login to DockerHub
+      - name: Login to Container Registry
         uses: docker/login-action@v2
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set up Docker Buildx
         id: buildx
@@ -82,14 +83,13 @@ jobs:
           push: true
           tags: ${{ steps.docker_meta.outputs.tags }}
           platforms: linux/arm64,linux/amd64
-          # Use runtime labels from docker_meta as well as fixed labels
           labels: |
             ${{ steps.docker_meta.outputs.labels }}
-            maintainer=Joris Borgdorff <joris@thehyve.nl>
-            org.opencontainers.image.authors=Joris Borgdorff <joris@thehyve.nl>, Pauline Conde <pauline.conde@kcl.ac.uk>
-            org.opencontainers.image.description=Key-value transformation for Kafka Connect, with S3 connector loaded
+            maintainer=Pim van Nierop <pim@thehyve.nl>
+            org.opencontainers.image.authors=Pim van Nierop <pim@thehyve.nl>
             org.opencontainers.image.vendor=RADAR-base
             org.opencontainers.image.licenses=Apache-2.0
+            org.opencontainers.image.description=Key-value transformation for Kafka Connect
 
       - name: Build and push S3
         id: docker_build_s3
@@ -100,14 +100,13 @@ jobs:
           push: true
           platforms: linux/arm64,linux/amd64
           tags: ${{ steps.docker_meta_s3.outputs.tags }}
-          # Use runtime labels from docker_meta as well as fixed labels
           labels: |
             ${{ steps.docker_meta_s3.outputs.labels }}
-            maintainer=Joris Borgdorff <joris@thehyve.nl>, Pauline Conde <pauline.conde@kcl.ac.uk>
-            org.opencontainers.image.authors=Joris Borgdorff <joris@thehyve.nl>, Pauline Conde <pauline.conde@kcl.ac.uk>
-            org.opencontainers.image.description=Key-value transformation for Kafka Connect
+            maintainer=Pim van Nierop <pim@thehyve.nl>
+            org.opencontainers.image.authors=Pim van Nierop <pim@thehyve.nl>
             org.opencontainers.image.vendor=RADAR-base
             org.opencontainers.image.licenses=Apache-2.0
+            org.opencontainers.image.description=Key-value transformation for Kafka Connect, with S3 connector loaded
 
       - name: Inspect image
         run: |
