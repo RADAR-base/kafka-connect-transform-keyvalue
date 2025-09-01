@@ -48,6 +48,7 @@ jobs:
 
   prepare-matrix:
     name: Prepare Matrix Output
+    permissions: {}
     runs-on: ubuntu-latest
     outputs:
       images: ${{ steps.step1.outputs.matrix }}
