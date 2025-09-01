@@ -6,17 +6,51 @@ on:
   workflow_dispatch:
 
 env:
-  DOCKER_IMAGE: radarbase/kafka-connect-transform-keyvalue
-  DOCKER_IMAGE_S3: radarbase/kafka-connect-transform-s3
+  REGISTRY: ghcr.io
+  REPOSITORY: ${{ github.repository }}
+  IMAGES: >-
+    [{
+    'name': 'kafka-connect-transform-keyvalue',
+    'build_file': 'Dockerfile',
+    'authors': 'Pim van Nierop <pim@thehyve.nl>',
+    'description': 'Key-value transformation for Kafka Connect'
+    },{
+    'name': 'kafka-connect-transform-s3',
+    'build_file': 'Dockerfile.s3',
+    'authors': 'Pim van Nierop <pim@thehyve.nl>',
+    'description': 'Key-value transformation for Kafka Connect, with S3 connector loaded'
+    }]
 
 jobs:
-  security:
+  prepare-matrix:
+    name: Prepare Matrix Output
     runs-on: ubuntu-latest
+    outputs:
+      images: ${{ steps.step1.outputs.matrix }}
+    steps:
+      - name: Create Matrix Variable
+        id: step1
+        run: |
+          echo "${{ env.IMAGES }}"
+          echo "matrix=${{ env.IMAGES }}" >> $GITHUB_OUTPUT
+
+  security:
+    needs: prepare-matrix
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        image: ${{ fromJson(needs.prepare-matrix.outputs.images ) }}
+    permissions:
+      contents: read
 
     steps:
       - uses: actions/checkout@v3
 
-      - name: Run Snyk to check for vulnerabilities in keyvalue image
+      - name: Lowercase image name
+        run: |
+          echo "DOCKER_IMAGE=${REGISTRY}/${REPOSITORY,,}/${{ matrix.image.name }}" >>${GITHUB_ENV}
+
+      - name: Run Snyk to check for vulnerabilities on docker image
         continue-on-error: true # To make sure that SARIF upload gets called
         uses: snyk/actions/docker@master
         env:
@@ -26,44 +60,17 @@ jobs:
           # 'exclude-app-vulns' only tests vulnerabilities in the base image.
           # Code base vulnerabilities are tested the scheduled-snyk.yaml action.
           args: >-
-            --file=Dockerfile
+            --file=${{ matrix.image.build_file }}
             --fail-on=upgradable
             --severity-threshold=high
             --policy-path=.snyk
             --exclude-app-vulns
             --org=radar-base
-            --sarif-file-output=snyk.sarif
+            --sarif-file-output=${{ matrix.image.name }}.sarif
 
       # Detected vulnerabilities will appear on Github in Security->Code_scanning_alerts tab
       - name: Upload result to GitHub Code Scanning
         uses: github/codeql-action/upload-sarif@v3
         with:
-          category: keyvalue
-          sarif_file: snyk.sarif
-
-      - name: Run Snyk to check for vulnerabilities in s3 connector image
-        continue-on-error: true # To make sure that SARIF upload gets called
-        uses: snyk/actions/docker@master
-        env:
-          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-        with:
-          image: ${{ env.DOCKER_IMAGE_S3 }}
-          # 'exclude-app-vulns' only tests vulnerabilities in the base image.
-          # Code base vulnerabilities are tested the scheduled-snyk.yaml action.
-          args: >-
-            --file=Dockerfile
-            --fail-on=upgradable
-            --severity-threshold=high
-            --policy-path=.snyk
-            --exclude-app-vulns
-            --org=radar-base
-            --sarif-file-output=snyk.sarif
-
-      # Detected vulnerabilities will appear on Github in Security->Code_scanning_alerts tab
-      - name: Upload result to GitHub Code Scanning
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          category: s3
-          sarif_file: snyk.sarif
-
-
+          sarif_file: ${{ matrix.image.name }}.sarif
+          category: ${{ matrix.image.name }}
