@@ -1,5 +1,11 @@
 [versions]
+project = "7.8.5"
+gradle = "8.14"
 kafka = "3.9.2"
+radarCommons = "1.2.4"
 
 [libraries]
 kafka-connect-transforms = { group = "org.apache.kafka", name = "connect-transforms", version.ref = "kafka" }
+
+[plugins]
+radar-root-project = { id = "org.radarbase.radar-root-project", version.ref = "radarCommons" }

@@ -1,9 +1,14 @@
 plugins {
     id 'java'
     id 'java-library'
+    alias libs.plugins.radar.root.project
 }
 
-version = '7.8.4'
+radarRootProject {
+    projectVersion = libs.versions.project
+    gradleVersion = libs.versions.gradle
+}
+
 description = "Kafka Connect transformation used to copy the key and value to a struct in the value of the record."
 
 sourceCompatibility = JavaVersion.VERSION_17
@@ -15,8 +20,4 @@ repositories {
 
 dependencies {
     compileOnly libs.kafka.connect.transforms
-}
-
-wrapper {
-    gradleVersion = '8.9'
 }
