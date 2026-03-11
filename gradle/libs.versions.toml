@@ -1,5 +1,5 @@
 [versions]
-project = "7.8.4"
+project = "7.8.5"
 gradle = "8.14"
 kafka = "3.9.2"
 radarCommons = "1.2.4"
