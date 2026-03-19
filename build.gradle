@@ -2,6 +2,7 @@ plugins {
     id 'java'
     id 'java-library'
     alias libs.plugins.radar.root.project
+    alias libs.plugins.sentry
 }
 
 radarRootProject {
@@ -18,6 +19,23 @@ repositories {
     mavenCentral()
 }
 
+configurations {
+    sentryJar
+}
+
 dependencies {
+    // --- Vulnerability fixes start ---
+    sentryJar(libs.sentry.log4j) {
+        // Are provided by Docker base image
+        exclude group: 'log4j', module: 'log4j'
+        exclude group: 'org.slf4j', module: 'slf4j-api'
+        exclude group: 'com.fasterxml.jackson.core'
+    }
+    // --- Vulnerability fixes end ---
     compileOnly libs.kafka.connect.transforms
+}
+
+tasks.register('copySentry', Copy) {
+    from configurations.sentryJar
+    into "build/libs/sentry"
 }
