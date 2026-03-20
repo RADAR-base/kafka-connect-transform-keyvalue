@@ -1,20 +1,27 @@
-ARG BASE_IMAGE=confluentinc/cp-kafka-connect-base:7.8.1
+ARG BASE_IMAGE=confluentinc/cp-kafka-connect-base:7.8.7
 
-FROM --platform=$BUILDPLATFORM gradle:8.9-jdk17 AS builder
+FROM --platform=$BUILDPLATFORM gradle:8.14-jdk17 AS builder
 
+COPY gradle/libs.versions.toml /code/gradle/
 COPY ./*.gradle /code/
 COPY src/main/java /code/src/main/java
 WORKDIR /code
-RUN gradle jar --no-watch-fs
+RUN gradle jar copySentry --no-watch-fs
 
 FROM ${BASE_IMAGE}
 
 ENV WAIT_FOR_KAFKA="1"
 ARG KAFKA_CONNECT_S3_VERSION="10.5.23"
 
+COPY --chown=appuser:appuser ./src/main/docker/ensure /etc/confluent/docker/ensure
+COPY --chown=appuser:appuser ./src/main/docker/launch /etc/confluent/docker/launch
+COPY --chown=appuser:appuser ./src/main/docker/kafka-wait /usr/bin/kafka-wait
 COPY --from=builder /code/build/libs/kafka-connect-transform-keyvalue*.jar /usr/share/"${COMPONENT}"/plugins/
-COPY ./src/main/docker/launch /etc/confluent/docker/launch
-COPY ./src/main/docker/kafka-wait /usr/bin/kafka-wait
+
+# Overwrite the log4j configuration to include Sentry monitoring.
+COPY --chown=appuser:appuser ./src/main/docker/log4j.properties.template /etc/confluent/docker/log4j.properties.template
+# Copy Sentry monitoring jars.
+COPY --from=builder /code/build/libs/sentry/*.jar /etc/kafka-connect/jars
 
 USER root
 RUN confluent-hub install --no-prompt --component-dir /usr/share/"${COMPONENT}"/plugins confluentinc/kafka-connect-s3:"${KAFKA_CONNECT_S3_VERSION}"

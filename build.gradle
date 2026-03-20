@@ -1,9 +1,15 @@
 plugins {
     id 'java'
     id 'java-library'
+    alias libs.plugins.radar.root.project
+    alias libs.plugins.sentry
 }
 
-version = '7.8.4'
+radarRootProject {
+    projectVersion = libs.versions.project
+    gradleVersion = libs.versions.gradle
+}
+
 description = "Kafka Connect transformation used to copy the key and value to a struct in the value of the record."
 
 sourceCompatibility = JavaVersion.VERSION_17
@@ -13,10 +19,23 @@ repositories {
     mavenCentral()
 }
 
-dependencies {
-    compileOnly 'org.apache.kafka:connect-transforms:3.6.2'
+configurations {
+    sentryJar
 }
 
-wrapper {
-    gradleVersion = '8.9'
+dependencies {
+    // --- Vulnerability fixes start ---
+    sentryJar(libs.sentry.log4j) {
+        // Are provided by Docker base image
+        exclude group: 'log4j', module: 'log4j'
+        exclude group: 'org.slf4j', module: 'slf4j-api'
+        exclude group: 'com.fasterxml.jackson.core'
+    }
+    // --- Vulnerability fixes end ---
+    compileOnly libs.kafka.connect.transforms
+}
+
+tasks.register('copySentry', Copy) {
+    from configurations.sentryJar
+    into "build/libs/sentry"
 }
