@@ -1,0 +1,64 @@
+// Assembles the Apache Iceberg sink as a Kafka Connect plugin. Apache publishes no ready-made plugin,
+// so this project resolves the dependency tree and copies it into that folder.
+plugins {
+    id 'java-base'
+}
+
+description = "Apache Iceberg sink for Kafka Connect, assembled as a plugin folder."
+
+repositories {
+    mavenCentral()
+}
+
+configurations {
+    icebergPlugin {
+        exclude group: 'javax.activation', module: 'activation'
+    }
+}
+
+dependencies {
+    icebergPlugin libs.iceberg.kafka.connect
+    icebergPlugin libs.iceberg.core
+    icebergPlugin libs.iceberg.parquet
+    icebergPlugin libs.iceberg.aws
+
+    // The AWS SDK modules S3FileIO and its credential providers use: the same list Apache
+    // Iceberg's own Kafka Connect runtime ships, at the SDK version that Iceberg release uses.
+    // Not iceberg-aws-bundle: it repackages older copies of jars Iceberg already brings.
+    icebergPlugin platform(libs.awssdk.bom)
+    icebergPlugin 'software.amazon.awssdk:apache-client'
+    icebergPlugin 'software.amazon.awssdk:auth'
+    icebergPlugin 'software.amazon.awssdk:http-auth-aws-crt'
+    icebergPlugin 'software.amazon.awssdk:iam'
+    icebergPlugin 'software.amazon.awssdk:sso'
+    icebergPlugin 'software.amazon.awssdk:s3'
+    icebergPlugin 'software.amazon.awssdk:kms'
+    icebergPlugin 'software.amazon.awssdk:glue'
+    icebergPlugin 'software.amazon.awssdk:sts'
+    icebergPlugin 'software.amazon.awssdk:dynamodb'
+    icebergPlugin 'software.amazon.awssdk:lakeformation'
+
+    // Parquet's writer needs Hadoop's Configuration class, though no Hadoop runs anywhere.
+    // These exclusions are the ones Apache Iceberg's own Kafka Connect runtime build uses.
+    icebergPlugin(libs.hadoop.common) {
+        exclude group: 'log4j'
+        exclude group: 'org.slf4j'
+        exclude group: 'ch.qos.reload4j'
+        exclude group: 'org.apache.avro', module: 'avro'
+        exclude group: 'com.google.guava'
+        exclude group: 'com.google.protobuf'
+        exclude group: 'org.apache.curator'
+        exclude group: 'org.apache.zookeeper'
+        exclude group: 'org.apache.kerby'
+        exclude group: 'org.apache.hadoop', module: 'hadoop-auth'
+        exclude group: 'org.apache.commons', module: 'commons-configuration2'
+        exclude group: 'org.apache.hadoop.thirdparty', module: 'hadoop-shaded-protobuf_3_7'
+        exclude group: 'org.eclipse.jetty'
+    }
+}
+
+// Kafka Connect treats each folder under plugin.path as one plugin with its own classloader.
+tasks.register('assembleConnectPlugin', Copy) {
+    from configurations.icebergPlugin
+    into layout.buildDirectory.dir('plugin/iceberg-sink/lib')
+}
