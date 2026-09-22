@@ -22,9 +22,6 @@ dependencies {
     icebergPlugin libs.iceberg.parquet
     icebergPlugin libs.iceberg.aws
 
-    // The AWS SDK modules S3FileIO and its credential providers use: the same list Apache
-    // Iceberg's own Kafka Connect runtime ships, at the SDK version that Iceberg release uses.
-    // Not iceberg-aws-bundle: it repackages older copies of jars Iceberg already brings.
     icebergPlugin platform(libs.awssdk.bom)
     icebergPlugin 'software.amazon.awssdk:apache-client'
     icebergPlugin 'software.amazon.awssdk:auth'
@@ -38,8 +35,6 @@ dependencies {
     icebergPlugin 'software.amazon.awssdk:dynamodb'
     icebergPlugin 'software.amazon.awssdk:lakeformation'
 
-    // Parquet's writer needs Hadoop's Configuration class, though no Hadoop runs anywhere.
-    // These exclusions are the ones Apache Iceberg's own Kafka Connect runtime build uses.
     icebergPlugin(libs.hadoop.common) {
         exclude group: 'log4j'
         exclude group: 'org.slf4j'
