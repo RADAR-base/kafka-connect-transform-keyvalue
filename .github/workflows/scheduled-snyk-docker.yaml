@@ -1,0 +1,78 @@
+name: Snyk scheduled Docker base image scan
+
+on:
+  schedule:
+    - cron: '0 3 * * 1'
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  REPOSITORY: ${{ github.repository }}
+  IMAGES: >-
+    [{
+    'name': 'kafka-connect-transform-keyvalue',
+    'build_file': 'Dockerfile',
+    'authors': 'Pim van Nierop <pim@thehyve.nl>',
+    'description': 'Key-value transformation for Kafka Connect'
+    },{
+    'name': 'kafka-connect-transform-s3',
+    'build_file': 'Dockerfile.s3',
+    'authors': 'Pim van Nierop <pim@thehyve.nl>',
+    'description': 'Key-value transformation for Kafka Connect, with S3 connector loaded'
+    }]
+
+jobs:
+  prepare-matrix:
+    name: Prepare Matrix Output
+    runs-on: ubuntu-latest
+    outputs:
+      images: ${{ steps.step1.outputs.matrix }}
+    steps:
+      - name: Create Matrix Variable
+        id: step1
+        run: |
+          echo "${{ env.IMAGES }}"
+          echo "matrix=${{ env.IMAGES }}" >> $GITHUB_OUTPUT
+
+  security:
+    needs: prepare-matrix
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        image: ${{ fromJson(needs.prepare-matrix.outputs.images ) }}
+    permissions:
+      contents: read
+      security-events: write
+      packages: read
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Lowercase image name
+        run: |
+          echo "DOCKER_IMAGE=${REGISTRY}/${REPOSITORY,,}/${{ matrix.image.name }}" >>${GITHUB_ENV}
+
+      - name: Run Snyk to check for vulnerabilities on docker image
+        continue-on-error: true # To make sure that SARIF upload gets called
+        uses: snyk/actions/docker@master
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          image: ${{ env.DOCKER_IMAGE }}
+          # 'exclude-app-vulns' only tests vulnerabilities in the base image.
+          # Code base vulnerabilities are tested the scheduled-snyk.yaml action.
+          args: >-
+            --file=${{ matrix.image.build_file }}
+            --fail-on=upgradable
+            --severity-threshold=high
+            --policy-path=.snyk
+            --exclude-app-vulns
+            --org=radar-base
+            --sarif-file-output=snyk.sarif
+
+      # Detected vulnerabilities will appear on Github in Security->Code_scanning_alerts tab
+      - name: Upload result to GitHub Code Scanning
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: snyk.sarif
+          category: ${{ matrix.image.name }}

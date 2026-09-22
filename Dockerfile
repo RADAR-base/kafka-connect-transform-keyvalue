@@ -1,7 +1,8 @@
-ARG BASE_IMAGE=confluentinc/cp-kafka-connect-base:7.6.0
+ARG BASE_IMAGE=confluentinc/cp-kafka-connect-base:7.8.7
 
-FROM --platform=$BUILDPLATFORM gradle:8.3-jdk17 as builder
+FROM --platform=$BUILDPLATFORM gradle:8.14-jdk17 AS builder
 
+COPY gradle/libs.versions.toml /code/gradle/
 COPY ./*.gradle /code/
 COPY src/main/java /code/src/main/java
 WORKDIR /code
