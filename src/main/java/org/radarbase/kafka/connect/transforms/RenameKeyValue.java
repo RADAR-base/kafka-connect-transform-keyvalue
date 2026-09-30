@@ -30,22 +30,34 @@ import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.transforms.Transformation;
+import org.apache.kafka.connect.transforms.util.SimpleConfig;
 
 /**
  * This transforms records by renaming every top-level field of the key to key_ followed by the
  * field name in snake_case, and every top-level field of the value to value_ followed by the field
  * name in snake_case. The key field projectId becomes key_project_id and the value field
- * timeReceived becomes value_time_received.
+ * timeReceived becomes value_time_received. The text between the prefix and the field name is
+ * set by the delimiter option, which defaults to an underscore.
  */
 public class RenameKeyValue<R extends ConnectRecord<R>> implements Transformation<R> {
   private static final String PURPOSE = "renaming key and value fields";
-  private static final String KEY_PREFIX = "key_";
-  private static final String VALUE_PREFIX = "value_";
+  private static final String KEY_PREFIX = "key";
+  private static final String VALUE_PREFIX = "value";
+  private static final String DELIMITER_CONFIG = "delimiter";
   private static final Pattern LOWER_UPPER = Pattern.compile("([a-z0-9])([A-Z])");
   private static final Pattern ACRONYM_WORD = Pattern.compile("([A-Z]+)([A-Z][a-z])");
-  private static final ConfigDef CONFIG_DEF = new ConfigDef();
+  private static final ConfigDef CONFIG_DEF = new ConfigDef()
+      .define(DELIMITER_CONFIG,
+          ConfigDef.Type.STRING,
+          "_",
+          new ConfigDef.NonEmptyString(),
+          ConfigDef.Importance.LOW,
+          "Text between the key or value prefix and the field name. The default _ gives"
+              + " key_project_id. Use only letters, digits and underscores if the names are read"
+              + " by SQL engines such as Trino, which read a dot as a nested field.");
 
   private final Map<String, String> snakeCaseNames = new ConcurrentHashMap<>();
+  private String delimiter = "_";
 
   @Override
   public R apply(R r) {
@@ -93,7 +105,7 @@ public class RenameKeyValue<R extends ConnectRecord<R>> implements Transformatio
   }
 
   private String newName(String prefix, String name) {
-    return prefix + snakeCaseNames.computeIfAbsent(name, RenameKeyValue::snakeCase);
+    return prefix + delimiter + snakeCaseNames.computeIfAbsent(name, RenameKeyValue::snakeCase);
   }
 
   /** Converts a camelCase name to snake_case, for example heartRate to heart_rate. */
@@ -122,5 +134,7 @@ public class RenameKeyValue<R extends ConnectRecord<R>> implements Transformatio
 
   @Override
   public void configure(Map<String, ?> map) {
+    SimpleConfig simpleConfig = new SimpleConfig(CONFIG_DEF, map);
+    delimiter = simpleConfig.getString(DELIMITER_CONFIG);
   }
 }
