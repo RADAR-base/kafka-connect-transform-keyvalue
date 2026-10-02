@@ -33,14 +33,18 @@ import org.apache.kafka.connect.transforms.Transformation;
 import org.apache.kafka.connect.transforms.util.SimpleConfig;
 
 /**
- * This transforms records by renaming every top-level field of the key to key_ followed by the
- * field name in snake_case, and every top-level field of the value to value_ followed by the field
- * name in snake_case. The key field projectId becomes key_project_id and the value field
- * timeReceived becomes value_time_received. The text between the prefix and the field name is
- * set by the delimiter option, which defaults to an underscore.
+ * This transforms records by copying every top-level field of the key and of the value into one
+ * new value, renamed on the way. Key fields become key_ followed by the field name in snake_case,
+ * value fields become value_ followed by the field name in snake_case, and a timestamp field holds
+ * the Kafka record timestamp in milliseconds, as MergeKey adds it. The key field projectId becomes
+ * key_project_id and the value field timeReceived becomes value_time_received. The record key is
+ * kept unchanged. The text between the prefix and the field name is set by the delimiter option,
+ * which defaults to an underscore. This replaces running MergeKey after the renaming, so do not
+ * run both.
  */
-public class RenameKeyValue<R extends ConnectRecord<R>> implements Transformation<R> {
-  private static final String PURPOSE = "renaming key and value fields";
+public class IcebergRow<R extends ConnectRecord<R>> implements Transformation<R> {
+  private static final String PURPOSE = "renaming and merging key and value fields";
+  private static final String TIMESTAMP_FIELD = "timestamp";
   private static final String KEY_PREFIX = "key";
   private static final String VALUE_PREFIX = "value";
   private static final String DELIMITER_CONFIG = "delimiter";
@@ -61,51 +65,47 @@ public class RenameKeyValue<R extends ConnectRecord<R>> implements Transformatio
 
   @Override
   public R apply(R r) {
-    Schema keySchema = renameSchema(r.keySchema(), KEY_PREFIX);
-    Object key = renameValue(r.keySchema(), keySchema, r.key(), KEY_PREFIX);
-    Schema valueSchema = renameSchema(r.valueSchema(), VALUE_PREFIX);
-    Object value = renameValue(r.valueSchema(), valueSchema, r.value(), VALUE_PREFIX);
-    return r.newRecord(r.topic(), r.kafkaPartition(), keySchema, key, valueSchema, value,
+    if (r.valueSchema() == null) {
+      Map<String, Object> newValue = new HashMap<>();
+      newValue.put(TIMESTAMP_FIELD, r.timestamp());
+      requireMap(r.key(), PURPOSE).forEach((name, fieldValue) ->
+          newValue.put(newName(KEY_PREFIX, name), fieldValue));
+      requireMap(r.value(), PURPOSE).forEach((name, fieldValue) ->
+          newValue.put(newName(VALUE_PREFIX, name), fieldValue));
+      return r.newRecord(r.topic(), r.kafkaPartition(), r.keySchema(), r.key(), null, newValue,
+          r.timestamp());
+    }
+    Schema keySchema = requireStructSchema(r.keySchema());
+    Schema valueSchema = requireStructSchema(r.valueSchema());
+    SchemaBuilder schemaBuilder = SchemaBuilder.struct()
+        .name(valueSchema.name())
+        .version(valueSchema.version())
+        .doc(valueSchema.doc())
+        .field(TIMESTAMP_FIELD, Schema.INT64_SCHEMA);
+    for (Field field : keySchema.fields()) {
+      schemaBuilder.field(newName(KEY_PREFIX, field.name()), field.schema());
+    }
+    for (Field field : valueSchema.fields()) {
+      schemaBuilder.field(newName(VALUE_PREFIX, field.name()), field.schema());
+    }
+    Schema schema = schemaBuilder.build();
+
+    Struct key = requireStruct(r.key(), PURPOSE);
+    Struct value = requireStruct(r.value(), PURPOSE);
+    Struct newValue = new Struct(schema);
+    newValue.put(TIMESTAMP_FIELD, r.timestamp());
+    for (Field field : keySchema.fields()) {
+      newValue.put(newName(KEY_PREFIX, field.name()), key.get(field));
+    }
+    for (Field field : valueSchema.fields()) {
+      newValue.put(newName(VALUE_PREFIX, field.name()), value.get(field));
+    }
+    return r.newRecord(r.topic(), r.kafkaPartition(), r.keySchema(), r.key(), schema, newValue,
         r.timestamp());
   }
 
-  private Schema renameSchema(Schema schema, String prefix) {
-    if (schema == null) {
-      return null;
-    }
-    SchemaBuilder schemaBuilder = SchemaBuilder.struct()
-        .name(schema.name())
-        .version(schema.version())
-        .doc(schema.doc());
-    if (schema.isOptional()) {
-      schemaBuilder.optional();
-    }
-    for (Field field : requireStructSchema(schema).fields()) {
-      schemaBuilder.field(newName(prefix, field.name()), field.schema());
-    }
-    return schemaBuilder.build();
-  }
-
-  private Object renameValue(Schema schema, Schema newSchema, Object value, String prefix) {
-    if (value == null) {
-      return null;
-    } else if (schema == null) {
-      Map<String, Object> newMap = new HashMap<>();
-      requireMap(value, PURPOSE).forEach((name, fieldValue) ->
-          newMap.put(newName(prefix, name), fieldValue));
-      return newMap;
-    } else {
-      Struct struct = requireStruct(value, PURPOSE);
-      Struct newStruct = new Struct(newSchema);
-      for (Field field : schema.fields()) {
-        newStruct.put(newName(prefix, field.name()), struct.get(field));
-      }
-      return newStruct;
-    }
-  }
-
   private String newName(String prefix, String name) {
-    return prefix + delimiter + snakeCaseNames.computeIfAbsent(name, RenameKeyValue::snakeCase);
+    return prefix + delimiter + snakeCaseNames.computeIfAbsent(name, IcebergRow::snakeCase);
   }
 
   /** Converts a camelCase name to snake_case, for example heartRate to heart_rate. */
@@ -116,6 +116,9 @@ public class RenameKeyValue<R extends ConnectRecord<R>> implements Transformatio
   }
 
   private static Schema requireStructSchema(Schema schema) {
+    if (schema == null) {
+      throw new DataException("Records need both a key schema and a value schema.");
+    }
     if (schema.type() != Schema.Type.STRUCT) {
       throw new DataException(
           "Only struct keys and values can be renamed, but found " + schema.type() + ".");
