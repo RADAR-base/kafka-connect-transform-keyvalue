@@ -5,10 +5,19 @@ kafka = "3.9.2"
 radarCommons = "1.2.6"
 sentry = "6.1.0"
 sentryLog4j = "1.7.30"
+iceberg = "1.11.0"
+hadoop = "3.4.3"
+awssdk = "2.44.4"
 
 [libraries]
 kafka-connect-transforms = { group = "org.apache.kafka", name = "connect-transforms", version.ref = "kafka" }
 sentry-log4j = { group = "io.sentry", name = "sentry-log4j", version.ref = "sentryLog4j" }
+iceberg-kafka-connect = { group = "org.apache.iceberg", name = "iceberg-kafka-connect", version.ref = "iceberg" }
+iceberg-core = { group = "org.apache.iceberg", name = "iceberg-core", version.ref = "iceberg" }
+iceberg-parquet = { group = "org.apache.iceberg", name = "iceberg-parquet", version.ref = "iceberg" }
+iceberg-aws = { group = "org.apache.iceberg", name = "iceberg-aws", version.ref = "iceberg" }
+awssdk-bom = { group = "software.amazon.awssdk", name = "bom", version.ref = "awssdk" }
+hadoop-common = { group = "org.apache.hadoop", name = "hadoop-common", version.ref = "hadoop" }
 
 [plugins]
 radar-root-project = { id = "org.radarbase.radar-root-project", version.ref = "radarCommons" }

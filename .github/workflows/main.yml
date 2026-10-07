@@ -22,6 +22,11 @@ env:
     'build_file': 'Dockerfile.s3',
     'authors': 'Pim van Nierop <pim@thehyve.nl>',
     'description': 'Key-value transformation for Kafka Connect, with S3 connector loaded'
+    },{
+    'name': 'kafka-connect-iceberg',
+    'build_file': 'iceberg-plugin/Dockerfile',
+    'authors': 'this-Aditya <adityamishra2217@gmail.com>',
+    'description': 'Apache Iceberg sink for Kafka Connect, with RADAR transforms loaded'
     }]
 
 jobs:
