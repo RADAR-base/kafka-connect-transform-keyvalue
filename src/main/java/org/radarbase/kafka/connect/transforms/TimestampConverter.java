@@ -35,11 +35,13 @@ import static org.apache.kafka.connect.transforms.util.Requirements.requireMap;
 import static org.apache.kafka.connect.transforms.util.Requirements.requireStruct;
 
 /**
- * This transforms records converting a timestamp value to an actual timestamp field.
+ * This transforms records converting a timestamp value to an actual timestamp field. An optional
+ * field stays optional, and a null value stays null.
  */
 public class TimestampConverter<R extends ConnectRecord<R>> implements Transformation<R> {
   private static final String PURPOSE = "convert time fields to actual dates";
   private static final String FIELDS_CONFIG = "fields";
+  private static final Schema OPTIONAL_TIMESTAMP_SCHEMA = Timestamp.builder().optional().build();
 
   private static final ConfigDef CONFIG_DEF = new ConfigDef()
           .define(FIELDS_CONFIG,
@@ -69,7 +71,8 @@ public class TimestampConverter<R extends ConnectRecord<R>> implements Transform
     for (Field field : oldSchema.fields()) {
       String fieldName = field.name();
       if (shouldConvertTimestamp(field)) {
-        schemaBuilder.field(fieldName, Timestamp.SCHEMA);
+        schemaBuilder.field(fieldName,
+            field.schema().isOptional() ? OPTIONAL_TIMESTAMP_SCHEMA : Timestamp.SCHEMA);
         shouldConvert = true;
       } else {
         schemaBuilder.field(fieldName, field.schema());
@@ -84,8 +87,8 @@ public class TimestampConverter<R extends ConnectRecord<R>> implements Transform
     Struct newData = new Struct(schema);
     for (Field field : schema.fields()) {
       Object fieldVal;
-      if (field.schema().equals(Timestamp.SCHEMA)
-          && !oldSchema.field(field.name()).schema().equals(Timestamp.SCHEMA)) {
+      if (Timestamp.LOGICAL_NAME.equals(field.schema().name())
+          && !Timestamp.LOGICAL_NAME.equals(oldSchema.field(field.name()).schema().name())) {
         fieldVal = convertTimestamp(recordValue.get(field));
       } else {
         fieldVal = recordValue.get(field);
@@ -98,7 +101,7 @@ public class TimestampConverter<R extends ConnectRecord<R>> implements Transform
 
   private boolean shouldConvertTimestamp(Field field) {
     return timeFields.contains(field.name())
-            && !field.schema().equals(Timestamp.SCHEMA)
+            && !Timestamp.LOGICAL_NAME.equals(field.schema().name())
             && (field.schema().type() == Schema.Type.FLOAT64
             || field.schema().type() == Schema.Type.INT64);
   }
@@ -121,7 +124,9 @@ public class TimestampConverter<R extends ConnectRecord<R>> implements Transform
   }
 
   private Object convertTimestamp(Object time){
-    if (time instanceof Double) {
+    if (time == null) {
+      return null;
+    } else if (time instanceof Double) {
       // with double assume it is seconds
       return new Date(Math.round((Double) time * 1000));
     } else if (time instanceof Long) {
