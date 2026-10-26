@@ -21,7 +21,6 @@ import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.regex.Pattern;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.data.Field;
@@ -34,40 +33,47 @@ import org.apache.kafka.connect.transforms.util.SimpleConfig;
 
 /**
  * This transforms records by copying every top-level field of the key and of the value into one
- * new value, renamed on the way. Key fields become key_ followed by the field name in snake_case,
- * value fields become value_ followed by the field name in snake_case, and a timestamp field holds
- * the Kafka record timestamp in milliseconds, as MergeKey adds it. The key field projectId becomes
- * key_project_id and the value field timeReceived becomes value_time_received. The record key is
+ * new value, renamed on the way. Key fields become key_ followed by the field name in lowercase,
+ * value fields become value_ followed by the field name in lowercase, and a timestamp field holds
+ * the Kafka record timestamp in milliseconds, as MergeKey adds it. That field is called timestamp
+ * unless the timestamp.field option names it differently. The key field projectId becomes
+ * key_projectid and the value field timeReceived becomes value_timereceived. The record key is
  * kept unchanged. The text between the prefix and the field name is set by the delimiter option,
  * which defaults to an underscore. This replaces running MergeKey after the renaming, so do not
  * run both.
  */
 public class IcebergRow<R extends ConnectRecord<R>> implements Transformation<R> {
   private static final String PURPOSE = "renaming and merging key and value fields";
-  private static final String TIMESTAMP_FIELD = "timestamp";
+  private static final String TIMESTAMP_CONFIG = "timestamp.field";
   private static final String KEY_PREFIX = "key";
   private static final String VALUE_PREFIX = "value";
   private static final String DELIMITER_CONFIG = "delimiter";
-  private static final Pattern LOWER_UPPER = Pattern.compile("([a-z0-9])([A-Z])");
-  private static final Pattern ACRONYM_WORD = Pattern.compile("([A-Z]+)([A-Z][a-z])");
   private static final ConfigDef CONFIG_DEF = new ConfigDef()
+      .define(TIMESTAMP_CONFIG,
+          ConfigDef.Type.STRING,
+          "timestamp",
+          new ConfigDef.NonEmptyString(),
+          ConfigDef.Importance.LOW,
+          "Name of the field that holds the Kafka record timestamp in milliseconds. It must not"
+              + " start with the key or value prefix, or it could clash with a renamed field.")
       .define(DELIMITER_CONFIG,
           ConfigDef.Type.STRING,
           "_",
           new ConfigDef.NonEmptyString(),
           ConfigDef.Importance.LOW,
           "Text between the key or value prefix and the field name. The default _ gives"
-              + " key_project_id. Use only letters, digits and underscores if the names are read"
+              + " key_projectid. Use only letters, digits and underscores if the names are read"
               + " by SQL engines such as Trino, which read a dot as a nested field.");
 
-  private final Map<String, String> snakeCaseNames = new ConcurrentHashMap<>();
+  private final Map<String, String> lowerCaseNames = new ConcurrentHashMap<>();
   private String delimiter = "_";
+  private String timestampField = "timestamp";
 
   @Override
   public R apply(R r) {
     if (r.valueSchema() == null) {
       Map<String, Object> newValue = new HashMap<>();
-      newValue.put(TIMESTAMP_FIELD, r.timestamp());
+      newValue.put(timestampField, r.timestamp());
       requireMap(r.key(), PURPOSE).forEach((name, fieldValue) ->
           newValue.put(newName(KEY_PREFIX, name), fieldValue));
       requireMap(r.value(), PURPOSE).forEach((name, fieldValue) ->
@@ -81,7 +87,7 @@ public class IcebergRow<R extends ConnectRecord<R>> implements Transformation<R>
         .name(valueSchema.name())
         .version(valueSchema.version())
         .doc(valueSchema.doc())
-        .field(TIMESTAMP_FIELD, Schema.INT64_SCHEMA);
+        .field(timestampField, Schema.INT64_SCHEMA);
     for (Field field : keySchema.fields()) {
       schemaBuilder.field(newName(KEY_PREFIX, field.name()), field.schema());
     }
@@ -93,7 +99,7 @@ public class IcebergRow<R extends ConnectRecord<R>> implements Transformation<R>
     Struct key = requireStruct(r.key(), PURPOSE);
     Struct value = requireStruct(r.value(), PURPOSE);
     Struct newValue = new Struct(schema);
-    newValue.put(TIMESTAMP_FIELD, r.timestamp());
+    newValue.put(timestampField, r.timestamp());
     for (Field field : keySchema.fields()) {
       newValue.put(newName(KEY_PREFIX, field.name()), key.get(field));
     }
@@ -105,14 +111,7 @@ public class IcebergRow<R extends ConnectRecord<R>> implements Transformation<R>
   }
 
   private String newName(String prefix, String name) {
-    return prefix + delimiter + snakeCaseNames.computeIfAbsent(name, IcebergRow::snakeCase);
-  }
-
-  /** Converts a camelCase name to snake_case, for example heartRate to heart_rate. */
-  static String snakeCase(String name) {
-    String separated = LOWER_UPPER.matcher(name).replaceAll("$1_$2");
-    separated = ACRONYM_WORD.matcher(separated).replaceAll("$1_$2");
-    return separated.toLowerCase(Locale.ROOT);
+    return prefix + delimiter + lowerCaseNames.computeIfAbsent(name, n -> n.toLowerCase(Locale.ROOT));
   }
 
   private static Schema requireStructSchema(Schema schema) {
@@ -139,5 +138,6 @@ public class IcebergRow<R extends ConnectRecord<R>> implements Transformation<R>
   public void configure(Map<String, ?> map) {
     SimpleConfig simpleConfig = new SimpleConfig(CONFIG_DEF, map);
     delimiter = simpleConfig.getString(DELIMITER_CONFIG);
+    timestampField = simpleConfig.getString(TIMESTAMP_CONFIG);
   }
 }
